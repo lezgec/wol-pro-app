@@ -1,6 +1,9 @@
 export type Device = { id: number; name: string; mac: string; wake_method: string; can_wake: boolean };
-export type DeviceList = { version: 1; email: string | null; devices: Device[] };
-export type MobileAction = { kind: 'devices' } | { kind: 'wake'; deviceId: number };
+export type DeviceList = { version: 1; email: string | null; devices: Device[]; alexa_ready?: boolean };
+export type MobileAction = { kind: 'devices' } | { kind: 'wake'; deviceId: number }
+  | { kind: 'create'; name: string; mac: string }
+  | { kind: 'update'; deviceId: number; name: string; mac: string }
+  | { kind: 'logout' };
 export type BridgeReply = { channel: 'wol-mobile-v1'; id: number; status: number; body: unknown };
 
 // Requests run in the trusted panel, where HttpOnly session cookies remain.
@@ -25,11 +28,18 @@ export function requestScript(origin: string, id: number, action: MobileAction):
           delete data.csrf_token;
           reply(session.status, data);
         } else {
-          const result = await fetch('/api/mobile/v1/devices/' + action.deviceId + '/wake', {
-            ...options,method:'POST',headers:{...options.headers,'X-CSRF-Token':data.csrf_token}
+          const path = action.kind === 'logout' ? '/api/mobile/v1/logout'
+            : action.kind === 'create' ? '/api/mobile/v1/devices'
+            : '/api/mobile/v1/devices/' + action.deviceId + (action.kind === 'wake' ? '/wake' : '');
+          const write = action.kind === 'create' || action.kind === 'update';
+          const result = await fetch(path, {
+            ...options,method:action.kind === 'update' ? 'PUT' : 'POST',
+            headers:{...options.headers,'X-CSRF-Token':data.csrf_token,...(write ? {'Content-Type':'application/json'} : {})},
+            ...(write ? {body:JSON.stringify({name:action.name,mac:action.mac})} : {})
           });
           const body = (result.headers.get('content-type') || '').includes('application/json')
             ? await result.json() : {message:'No se pudo completar la orden.'};
+          delete body.csrf_token;
           reply(result.status, body);
         }
       } catch (_) { reply(0, {message:'No se pudo conectar. Comprueba tu conexión e inténtalo de nuevo.'}); }

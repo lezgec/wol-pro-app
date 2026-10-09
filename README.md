@@ -2,11 +2,11 @@
 
 Base móvil Android e iOS con Expo, React Native y TypeScript. Reutiliza el panel Flask en Azure: https://wol.luiszamora.dev.
 
-Después de iniciar sesión, la app muestra una pantalla nativa de equipos con actualización y encendido. El acceso, registro y administración siguen en el panel web. Incluye área segura, carga, recuperación de errores y navegación atrás Android. Los enlaces externos se abren en el navegador del sistema.
+Después de iniciar sesión, la app muestra navegación inferior nativa: Inicio, Dispositivos y Cuenta. Incluye formularios nativos para agregar y editar nombre/MAC, actualización de dispositivos, instrucciones Alexa y cierre de sesión. El acceso y registro de cuentas siguen en el panel web. Incluye área segura, carga, recuperación de errores y navegación atrás Android. Los enlaces externos se abren en el navegador del sistema.
 
-La API `/api/mobile/v1/devices` lista solo los equipos de la sesión y `/api/mobile/v1/devices/{id}/wake` reutiliza el encendido del panel. Las solicitudes se ejecutan mediante un puente en la WebView del mismo origen; la cookie HttpOnly y el token CSRF permanecen allí. No se crean tokens móviles persistentes ni se copian contraseñas. La app valida el origen y correlaciona respuestas; no reintenta órdenes automáticamente.
+La API `/api/mobile/v1/devices` permite listar/crear dispositivos y `/api/mobile/v1/devices/{id}` editar los propios. Las solicitudes se ejecutan mediante un puente en la WebView del mismo origen; la cookie HttpOnly y el token CSRF permanecen allí. No se crean tokens móviles persistentes ni se copian contraseñas. La app valida el origen y correlaciona respuestas; no reintenta escrituras automáticamente.
 
-La pantalla nativa requiere el backend actualizado. Si la API aún no está disponible, se mantiene el panel web. Administrar equipos y cuenta abre el panel; el botón Equipos vuelve a consultar y mostrar la lista nativa. Los equipos Alexa muestran instrucciones y los de red local no habilitada indican cómo cambiar el método.
+La pantalla nativa requiere el backend actualizado. Si la API aún no está disponible, se mantiene el panel web. Router por Internet aparece deshabilitado como «Próximamente», sin campos IP/puerto. Los nuevos dispositivos usan Alexa; al editar se conserva el método existente. La API móvil también bloquea el encendido directo, aunque un cliente anterior lo intente. Alexa muestra instrucciones y el estado real de vinculación.
 
 Backend, MariaDB, correo y Alexa siguen en [wol_panel](https://github.com/lezgec/wol_panel). No se copia la base de datos ni credenciales de Azure. El teléfono no envía UDP local: las órdenes siguen ejecutándose en el servidor.
 
@@ -52,4 +52,4 @@ Preview genera APK Android. iOS y tiendas requieren cuentas de desarrollador, fi
 
 ## Próxima etapa
 
-Sustituir registro y administración por pantallas nativas y diseñar autenticación móvil independiente antes de retirar la WebView. Completar OAuth Amazon, pruebas físicas y requisitos de tiendas antes de publicar.
+Sustituir acceso y registro de cuentas por pantallas nativas y diseñar autenticación móvil independiente antes de retirar la WebView. Completar OAuth Amazon, pruebas físicas y requisitos de tiendas antes de publicar.

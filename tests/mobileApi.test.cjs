@@ -40,6 +40,28 @@ test('expired session never sends a wake request', async () => {
   const { reply, calls } = await execute({ kind: 'wake', deviceId: 1 }, [response(401, { error: 'authentication_required' })]);
   assert.equal(reply.status, 401); assert.equal(calls.length, 1);
 });
+test('create sends only device fields and strips returned CSRF', async () => {
+  const name = "PC'); throw new Error('injection'); //";
+  const { reply, calls } = await execute({ kind: 'create', name, mac: 'AA:BB:CC:DD:EE:11' },
+    [response(200, structuredClone(list)), response(201, structuredClone(list))]);
+  assert.equal(calls[1].url, '/api/mobile/v1/devices');
+  assert.equal(calls[1].options.method, 'POST');
+  assert.equal(JSON.parse(calls[1].options.body).name, name);
+  assert.equal(reply.body.csrf_token, undefined);
+  assert.equal(reply.status, 201);
+});
+test('edit uses PUT and returns a validation failure without retry', async () => {
+  const { reply, calls } = await execute({ kind: 'update', deviceId: 1, name: 'PC', mac: 'bad' },
+    [response(200, list), response(400, { message: 'MAC inválida' })]);
+  assert.equal(calls[1].url, '/api/mobile/v1/devices/1');
+  assert.equal(calls[1].options.method, 'PUT');
+  assert.equal(reply.status, 400); assert.equal(calls.length, 2);
+});
+test('logout uses a CSRF-protected POST', async () => {
+  const { reply, calls } = await execute({ kind: 'logout' }, [response(200, list), response(200, { message: 'Sesión cerrada' })]);
+  assert.equal(calls[1].url, '/api/mobile/v1/logout');
+  assert.equal(calls[1].options.method, 'POST'); assert.equal(reply.status, 200);
+});
 test('older backend returns a controlled unavailable response', async () => {
   const { reply } = await execute({ kind: 'devices' }, [response(404, {}, 'text/html')]);
   assert.equal(reply.status, 404);

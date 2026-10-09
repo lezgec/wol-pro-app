@@ -3,33 +3,32 @@ import type { Device, DeviceList } from './mobileApi';
 
 type Props = {
   data: DeviceList; refreshing: boolean; busy: boolean; wakingId: number | null;
-  onRefresh: () => void; onWake: (device: Device) => void; onManage: () => void;
+  onRefresh: () => void; onWake: (device: Device) => void; onAdd: () => void; onEdit: (device: Device) => void;
 };
-const methods: Record<string, string> = { router: 'Router por Internet', alexa: 'Alexa', local: 'Red local del servidor' };
-
-export function DevicesScreen({ data, refreshing, busy, wakingId, onRefresh, onWake, onManage }: Props) {
+export function DevicesScreen({ data, refreshing, busy, wakingId, onRefresh, onWake, onAdd, onEdit }: Props) {
   return <View style={styles.screen}>
     <FlatList data={data.devices} keyExtractor={device => String(device.id)} contentContainerStyle={styles.list}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#22d3ee" />}
       ListHeaderComponent={<View style={styles.intro}>
-        <Text style={styles.eyebrow}>TU PANEL DE ENERGÍA</Text>
-        <Text style={styles.heading}>Mis equipos</Text>
-        <Text style={styles.secondary}>{data.email}</Text>
-        <Text style={styles.secondary}>{data.devices.length} {data.devices.length === 1 ? 'equipo registrado' : 'equipos registrados'}</Text>
+        <Text style={styles.eyebrow}>TU ESPACIO CONECTADO</Text>
+        <Text style={styles.heading}>Mis dispositivos</Text>
+        <Text style={styles.secondary}>{data.devices.length} {data.devices.length === 1 ? 'dispositivo registrado' : 'dispositivos registrados'}</Text>
+        <Pressable accessibilityRole="button" disabled={busy} onPress={onAdd} style={styles.button}><Text style={styles.buttonText}>+ Agregar dispositivo</Text></Pressable>
       </View>}
-      ListEmptyComponent={<View style={styles.card}><Text style={styles.name}>Agrega tu primer equipo</Text><Text style={styles.secondary}>Registra su nombre y dirección MAC desde Administrar equipos.</Text></View>}
+      ListEmptyComponent={<View style={styles.card}><Text style={styles.name}>Tu primer dispositivo empieza aquí</Text><Text style={styles.secondary}>Agrega un nombre y su dirección MAC para usarlo con Alexa.</Text></View>}
       renderItem={({ item }) => <View style={styles.card}>
         <View style={styles.row}><View style={styles.icon}><Text style={styles.iconText}>PC</Text></View><View style={styles.details}>
           <Text style={styles.name}>{item.name}</Text><Text style={styles.mac}>{item.mac}</Text>
         </View></View>
-        <Text style={styles.method}>{methods[item.wake_method] || 'Revisar configuración'}</Text>
-        <Pressable accessibilityRole="button" disabled={busy} onPress={() => onWake(item)} style={[styles.button, busy && styles.disabled]}>
-          {wakingId === item.id ? <ActivityIndicator color="#082f49" /> : <Text style={styles.buttonText}>{item.can_wake ? 'Encender equipo' : item.wake_method === 'alexa' ? 'Cómo encender con Alexa' : 'Ver instrucciones'}</Text>}
+        <View style={styles.row}><Text style={[styles.method, { flex: 1 }]}>{item.wake_method === 'alexa' ? 'Con Alexa' : 'Encendido directo · Próximamente'}</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel={`Editar ${item.name}`} disabled={busy} onPress={() => onEdit(item)}><Text style={styles.link}>Editar</Text></Pressable>
+        </View>
+        <Pressable accessibilityRole="button" disabled={busy || item.wake_method !== 'alexa'} onPress={() => onWake(item)} style={[styles.button, (busy || item.wake_method !== 'alexa') && styles.disabled]}>
+          {wakingId === item.id ? <ActivityIndicator color="#082f49" /> : <Text style={styles.buttonText}>{item.wake_method === 'alexa' ? 'Cómo encender con Alexa' : 'Próximamente'}</Text>}
         </Pressable>
       </View>}
       ListFooterComponent={<View style={styles.footer}>
-        <Text style={styles.secondary}>Enviar una orden no confirma que el equipo haya arrancado.</Text>
-        <Pressable accessibilityRole="button" onPress={onManage} style={styles.manage}><Text style={styles.link}>Administrar equipos y cuenta</Text></Pressable>
+        <Text style={styles.secondary}>El Echo debe estar en la misma red que tu dispositivo y Wake-on-LAN debe estar habilitado.</Text>
       </View>} />
   </View>;
 }

@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, BackHandler, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, BackHandler, Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
-import { DevicesScreen } from './src/DevicesScreen';
+import { NativeShell, type Tab } from './src/NativeShell';
+import { DeviceEditor } from './src/DeviceEditor';
 import { isDeviceList, parseReply, requestScript, type Device, type DeviceList, type MobileAction } from './src/mobileApi';
 
 const backend = new URL(process.env.EXPO_PUBLIC_BACKEND_URL || 'https://wol.luiszamora.dev');
@@ -20,24 +21,29 @@ export default function App() {
   const [devices, setDevices] = useState<DeviceList | null>(null);
   const [native, setNative] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [wakingId, setWakingId] = useState<number | null>(null);
+  const [tab, setTab] = useState<Tab>('home');
+  const [editing, setEditing] = useState<Device | 'new' | null>(null);
+  const [editorError, setEditorError] = useState<string | null>(null);
   const sequence = useRef(0);
   const pending = useRef<{ id: number; action: MobileAction; automatic: boolean; timer: ReturnType<typeof setTimeout> } | null>(null);
   const managing = useRef(false);
   const cancelRequest = () => {
     if (pending.current) clearTimeout(pending.current.timer);
     pending.current = null;
-    setBusy(false); setWakingId(null);
+    setBusy(false);
   };
   useEffect(() => () => { if (pending.current) clearTimeout(pending.current.timer); }, []);
   const request = (action: MobileAction, automatic = false) => {
     if (pending.current || !webView.current) return;
     const id = ++sequence.current;
     setBusy(true);
-    if (action.kind === 'wake') setWakingId(action.deviceId);
     const timer = setTimeout(() => {
       if (pending.current?.id !== id) return;
       cancelRequest();
+      if (action.kind === 'create' || action.kind === 'update') {
+        setEditorError('No pudimos confirmar si se guardó. Cierra este formulario y actualiza tus dispositivos antes de reintentar.');
+        return;
+      }
       if (!automatic) Alert.alert('Conexión interrumpida', action.kind === 'wake'
         ? 'No se pudo confirmar el envío. La orden podría haberse enviado; no se reintentará automáticamente.'
         : 'No se pudieron actualizar tus equipos. Inténtalo de nuevo.');
@@ -45,27 +51,22 @@ export default function App() {
     pending.current = { id, action, automatic, timer };
     webView.current.injectJavaScript(requestScript(backend.origin, id, action));
   };
-  const showWeb = () => { managing.current = true; setNative(false); };
-  const wake = (device: Device) => {
-    if (!device.can_wake) {
-      Alert.alert(device.wake_method === 'alexa' ? 'Encender con Alexa' : 'Revisar método de encendido',
-        device.wake_method === 'alexa' ? `Di «Alexa, enciende ${device.name}» o usa la app Alexa.`
-          : 'La red del servidor no alcanza tu casa. Selecciona Router por Internet o Alexa desde Administrar equipos.');
-      return;
-    }
-    request({ kind: 'wake', deviceId: device.id });
+  const alexaInstructions = (device?: Device) => {
+    Alert.alert(device ? 'Encender con Alexa' : 'Conecta con Alexa', device
+      ? `Di «Alexa, enciende ${device.name}» o usa la app Alexa. Tu Echo debe estar en la misma red que el equipo y Wake-on-LAN debe estar habilitado.`
+      : '1. Abre la app Alexa y busca la skill WoL Pro.\n2. Vincula tu cuenta de WoL Pro.\n3. Pide a Alexa que descubra dispositivos.\n4. Di «Alexa, enciende Escritorio».\n\nEl Echo debe estar en la misma red que el equipo.');
   };
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (native) { showWeb(); return true; }
+      if (native) { if (tab !== 'home') { setTab('home'); return true; } return false; }
       if (!canGoBack || failed) return false;
       webView.current?.goBack();
       return true;
     });
     return () => subscription.remove();
-  }, [canGoBack, failed, native]);
+  }, [canGoBack, failed, native, tab]);
   const retry = () => {
-    cancelRequest(); setNative(false); setDevices(null); managing.current = false;
+    cancelRequest(); setNative(false); setDevices(null); setEditing(null); setTab('home'); managing.current = false;
     setFailed(false); setLoading(true); setCanGoBack(false);
     setAttempt(value => value + 1);
   };
@@ -74,7 +75,7 @@ export default function App() {
       <SafeAreaView style={styles.container}>
         <StatusBar style="light" />
         <View style={styles.header}>
-          <Text style={styles.brand}>WoL Pro</Text>
+          <View style={styles.actions}><Image source={require('./assets/icon.png')} style={styles.logo} /><Text style={styles.brand}>WoL <Text style={styles.accent}>Pro</Text></Text></View>
           <View style={styles.actions}>
             {!native && devices && <Pressable accessibilityRole="button" disabled={busy || loading} onPress={() => { managing.current = false; request({ kind: 'devices' }); }}><Text style={styles.action}>Equipos</Text></Pressable>}
             <Pressable accessibilityRole="button" disabled={busy} accessibilityLabel="Actualizar" onPress={() => native ? request({ kind: 'devices' }) : retry()}>
@@ -102,7 +103,7 @@ export default function App() {
                 setCanGoBack(state.canGoBack);
                 try {
                   if (new URL(state.url).pathname === '/login' || new URL(state.url).pathname === '/logout') {
-                    cancelRequest(); setDevices(null); setNative(false); managing.current = false;
+                    cancelRequest(); setDevices(null); setNative(false); setEditing(null); setTab('home'); managing.current = false;
                   }
                 } catch { /* Ignore incomplete navigation URLs. */ }
               }}
@@ -118,14 +119,25 @@ export default function App() {
                 const operation = pending.current;
                 cancelRequest();
                 if (reply.status === 401) {
-                  setDevices(null); setNative(false); managing.current = false;
+                  setDevices(null); setNative(false); setEditing(null); setTab('home'); managing.current = false;
                   webView.current?.injectJavaScript(`location.href = '/login'; true;`);
                   return;
                 }
-                if (operation.action.kind === 'devices' && reply.status === 200 && isDeviceList(reply.body)) {
-                  setDevices(reply.body); setNative(true); return;
+                if (operation.action.kind === 'logout' && reply.status === 200) {
+                  setDevices(null); setNative(false); setTab('home');
+                  webView.current?.injectJavaScript(`location.href = '/login'; true;`);
+                  return;
+                }
+                if ((operation.action.kind === 'devices' || operation.action.kind === 'create' || operation.action.kind === 'update')
+                  && (reply.status === 200 || reply.status === 201) && isDeviceList(reply.body)) {
+                  setDevices(reply.body); setNative(true);
+                  if (operation.action.kind !== 'devices') { setEditing(null); setEditorError(null); setTab('devices'); }
+                  return;
                 }
                 const body = reply.body as { message?: unknown } | null;
+                if (operation.action.kind === 'create' || operation.action.kind === 'update') {
+                  setEditorError(typeof body?.message === 'string' ? body.message : 'No se pudo guardar. Inténtalo de nuevo.'); return;
+                }
                 if (!operation.automatic) Alert.alert(operation.action.kind === 'wake' && reply.status === 200 ? 'Orden enviada' : 'Aviso',
                   typeof body?.message === 'string' ? body.message : 'No se pudo completar la operación. Puedes usar el panel web.');
               }}
@@ -147,8 +159,14 @@ export default function App() {
               }} />
             </View>
           )}
-          {native && devices && <DevicesScreen data={devices} busy={busy} wakingId={wakingId} refreshing={busy && wakingId === null}
-            onRefresh={() => request({ kind: 'devices' })} onWake={wake} onManage={showWeb} />}
+          {native && devices && <NativeShell data={devices} tab={tab} onTab={setTab} busy={busy}
+            onRefresh={() => request({ kind: 'devices' })} onAlexa={alexaInstructions}
+            onAdd={() => { setEditorError(null); setEditing('new'); }}
+            onEdit={device => { setEditorError(null); setEditing(device); }}
+            onLogout={() => request({ kind: 'logout' })} backend={backend.origin} />}
+          {native && editing && <DeviceEditor key={editing === 'new' ? 'new' : editing.id} device={editing} busy={busy} error={editorError}
+            onClose={() => { setEditing(null); setEditorError(null); }}
+            onSave={(name, mac) => { setEditorError(null); request(editing === 'new' ? { kind: 'create', name, mac } : { kind: 'update', deviceId: editing.id, name, mac }); }} />}
           {loading && !failed && !native && <View pointerEvents="none" style={styles.loading}><ActivityIndicator color="#38bdf8" /><Text style={styles.description}>Cargando panel…</Text></View>}
         </View>
       </SafeAreaView>
@@ -159,6 +177,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0f172a' },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14 },
   brand: { color: '#f8fafc', fontSize: 22, fontWeight: '700' },
+  accent: { color: '#22d3ee' }, logo: { width: 34, height: 34, borderRadius: 10, marginRight: 10 },
   action: { color: '#38bdf8', padding: 8 },
   actions: { flexDirection: 'row', alignItems: 'center' },
   hiddenWeb: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, opacity: 0 },
