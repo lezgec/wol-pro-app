@@ -2,7 +2,11 @@
 
 Base móvil Android e iOS con Expo, React Native y TypeScript. Reutiliza el panel Flask en Azure: https://wol.luiszamora.dev.
 
-El panel se muestra en una WebView conservando formularios, sesiones, CSRF, equipos y órdenes del servidor. Incluye área segura, carga, recuperación de errores y navegación atrás Android. Los enlaces externos se abren en el navegador del sistema.
+Después de iniciar sesión, la app muestra una pantalla nativa de equipos con actualización y encendido. El acceso, registro y administración siguen en el panel web. Incluye área segura, carga, recuperación de errores y navegación atrás Android. Los enlaces externos se abren en el navegador del sistema.
+
+La API `/api/mobile/v1/devices` lista solo los equipos de la sesión y `/api/mobile/v1/devices/{id}/wake` reutiliza el encendido del panel. Las solicitudes se ejecutan mediante un puente en la WebView del mismo origen; la cookie HttpOnly y el token CSRF permanecen allí. No se crean tokens móviles persistentes ni se copian contraseñas. La app valida el origen y correlaciona respuestas; no reintenta órdenes automáticamente.
+
+La pantalla nativa requiere el backend actualizado. Si la API aún no está disponible, se mantiene el panel web. Administrar equipos y cuenta abre el panel; el botón Equipos vuelve a consultar y mostrar la lista nativa. Los equipos Alexa muestran instrucciones y los de red local no habilitada indican cómo cambiar el método.
 
 Backend, MariaDB, correo y Alexa siguen en [wol_panel](https://github.com/lezgec/wol_panel). No se copia la base de datos ni credenciales de Azure. El teléfono no envía UDP local: las órdenes siguen ejecutándose en el servidor.
 
@@ -24,6 +28,7 @@ Escanear el QR con Expo Go. `npm run android` abre un emulador instalado; `npm r
 
 ```sh
 npm run typecheck
+npm test
 npx expo-doctor
 npx expo export --platform all
 ```
@@ -47,4 +52,4 @@ Preview genera APK Android. iOS y tiendas requieren cuentas de desarrollador, fi
 
 ## Próxima etapa
 
-Agregar API móvil versionada al backend con autenticación apropiada, reutilizando lógica de usuarios, equipos y Alexa. Sustituir gradualmente el panel embebido por pantallas nativas. Completar OAuth Amazon, pruebas físicas y requisitos de tiendas antes de publicar.
+Sustituir registro y administración por pantallas nativas y diseñar autenticación móvil independiente antes de retirar la WebView. Completar OAuth Amazon, pruebas físicas y requisitos de tiendas antes de publicar.
