@@ -92,7 +92,8 @@ export default function App() {
               </Pressable>
             </View>
           ) : (
-            <WebView key={attempt} ref={webView} source={{ uri: backend.href }} style={native ? styles.hiddenWeb : styles.content}
+            <View pointerEvents={native ? 'none' : 'auto'} style={native ? styles.hiddenWeb : styles.content}>
+            <WebView key={attempt} ref={webView} source={{ uri: backend.href }} style={styles.content}
               accessibilityElementsHidden={native} importantForAccessibility={native ? 'no-hide-descendants' : 'auto'}
               originWhitelist={['https://*']} mixedContentMode="never"
               javaScriptCanOpenWindowsAutomatically={false} setSupportMultipleWindows={false}
@@ -144,6 +145,7 @@ export default function App() {
                 }
                 return false;
               }} />
+            </View>
           )}
           {native && devices && <DevicesScreen data={devices} busy={busy} wakingId={wakingId} refreshing={busy && wakingId === null}
             onRefresh={() => request({ kind: 'devices' })} onWake={wake} onManage={showWeb} />}
@@ -159,7 +161,7 @@ const styles = StyleSheet.create({
   brand: { color: '#f8fafc', fontSize: 22, fontWeight: '700' },
   action: { color: '#38bdf8', padding: 8 },
   actions: { flexDirection: 'row', alignItems: 'center' },
-  hiddenWeb: { position: 'absolute', width: 1, height: 1, opacity: 0 },
+  hiddenWeb: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, opacity: 0 },
   content: { flex: 1 },
   message: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 28, gap: 16 },
   title: { color: '#f8fafc', fontSize: 22, fontWeight: '600', textAlign: 'center' },

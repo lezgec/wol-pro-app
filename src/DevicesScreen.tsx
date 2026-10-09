@@ -19,7 +19,7 @@ export function DevicesScreen({ data, refreshing, busy, wakingId, onRefresh, onW
       </View>}
       ListEmptyComponent={<View style={styles.card}><Text style={styles.name}>Agrega tu primer equipo</Text><Text style={styles.secondary}>Registra su nombre y dirección MAC desde Administrar equipos.</Text></View>}
       renderItem={({ item }) => <View style={styles.card}>
-        <View style={styles.row}><View style={styles.icon}><Text style={styles.iconText}>⏻</Text></View><View style={styles.details}>
+        <View style={styles.row}><View style={styles.icon}><Text style={styles.iconText}>PC</Text></View><View style={styles.details}>
           <Text style={styles.name}>{item.name}</Text><Text style={styles.mac}>{item.mac}</Text>
         </View></View>
         <Text style={styles.method}>{methods[item.wake_method] || 'Revisar configuración'}</Text>
@@ -41,7 +41,7 @@ const styles = StyleSheet.create({
   card: { backgroundColor: '#162033', padding: 20, borderRadius: 20, gap: 16, borderWidth: 1, borderColor: '#263449' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 14 }, details: { flex: 1, gap: 6 },
   icon: { width: 46, height: 46, borderRadius: 14, backgroundColor: '#083344', alignItems: 'center', justifyContent: 'center' },
-  iconText: { color: '#22d3ee', fontSize: 28 }, name: { color: '#f8fafc', fontSize: 19, fontWeight: '600' },
+  iconText: { color: '#22d3ee', fontSize: 16, fontWeight: '700' }, name: { color: '#f8fafc', fontSize: 19, fontWeight: '600' },
   mac: { color: '#94a3b8', fontSize: 12, letterSpacing: 1 }, method: { color: '#a5f3fc', fontSize: 12 },
   button: { backgroundColor: '#22d3ee', padding: 15, borderRadius: 12, alignItems: 'center' },
   buttonText: { color: '#082f49', fontWeight: '700' }, disabled: { opacity: 0.5 },
