@@ -1,11 +1,12 @@
+import { stateLabels } from './ControlScreen';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import type { Device, DeviceList } from './mobileApi';
 
 type Props = {
   data: DeviceList; refreshing: boolean; busy: boolean; wakingId: number | null;
-  onRefresh: () => void; onWake: (device: Device) => void; onAdd: () => void; onEdit: (device: Device) => void;
+  onRefresh: () => void; onWake: (device: Device) => void; onAdd: () => void; onEdit: (device: Device) => void; onControl: (device: Device) => void; onDelete: (device: Device) => void;
 };
-export function DevicesScreen({ data, refreshing, busy, wakingId, onRefresh, onWake, onAdd, onEdit }: Props) {
+export function DevicesScreen({ data, refreshing, busy, wakingId, onRefresh, onWake, onAdd, onEdit, onControl, onDelete }: Props) {
   return <View style={styles.screen}>
     <FlatList data={data.devices} keyExtractor={device => String(device.id)} contentContainerStyle={styles.list}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#22d3ee" />}
@@ -20,9 +21,12 @@ export function DevicesScreen({ data, refreshing, busy, wakingId, onRefresh, onW
         <View style={styles.row}><View style={styles.icon}><Text style={styles.iconText}>PC</Text></View><View style={styles.details}>
           <Text style={styles.name}>{item.name}</Text><Text style={styles.mac}>{item.mac}</Text>
         </View></View>
+<Text style={styles.secondary}>{stateLabels[item.agent_state || 'unlinked']}</Text>
         <View style={styles.row}><Text style={[styles.method, { flex: 1 }]}>{item.wake_method === 'alexa' ? 'Con Alexa' : 'Encendido directo · Próximamente'}</Text>
           <Pressable accessibilityRole="button" accessibilityLabel={`Editar ${item.name}`} disabled={busy} onPress={() => onEdit(item)}><Text style={styles.link}>Editar</Text></Pressable>
         </View>
+        <Pressable accessibilityRole="button" onPress={() => onControl(item)} style={styles.button}><Text style={styles.buttonText}>Control de PC / Vincular agente</Text></Pressable>
+        <Pressable accessibilityRole="button" disabled={busy} onPress={() => onDelete(item)}><Text style={{ color: '#fda4af' }}>Eliminar equipo</Text></Pressable>
         <Pressable accessibilityRole="button" disabled={busy || item.wake_method !== 'alexa'} onPress={() => onWake(item)} style={[styles.button, (busy || item.wake_method !== 'alexa') && styles.disabled]}>
           {wakingId === item.id ? <ActivityIndicator color="#082f49" /> : <Text style={styles.buttonText}>{item.wake_method === 'alexa' ? 'Cómo encender con Alexa' : 'Próximamente'}</Text>}
         </Pressable>

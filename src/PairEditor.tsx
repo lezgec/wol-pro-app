@@ -1,0 +1,9 @@
+import { useState } from 'react';
+import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import type { Device } from './mobileApi';
+export function PairEditor({ device, busy, onClose, onPreview }: { device: Device; busy: boolean; onClose: () => void; onPreview: (code: string) => void }) {
+  const [code, setCode] = useState('');
+  const clean = code.trim().toUpperCase();
+  return <Modal transparent animationType="slide" onRequestClose={() => { if (!busy) onClose(); }}><View style={s.backdrop}><View style={s.card}><Text style={s.title}>Vincular {device.name}</Text><Text style={s.text}>En Windows, abre WoL Pro Agent y pulsa Vincular cuenta. Comprueba el código antes de autorizar este PC.</Text><TextInput accessibilityLabel="Código de vinculación" placeholder="ABCD-2345" placeholderTextColor="#64748b" autoCapitalize="characters" autoCorrect={false} maxLength={9} value={code} onChangeText={setCode} style={s.input} editable={!busy} /><Pressable accessibilityRole="button" disabled={busy || !/^[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(clean)} onPress={() => onPreview(clean)} style={s.button}><Text style={s.title}>{busy ? 'Comprobando…' : 'Comprobar código'}</Text></Pressable><Pressable accessibilityRole="button" disabled={busy} onPress={onClose}><Text style={s.link}>Volver</Text></Pressable></View></View></Modal>;
+}
+const s = StyleSheet.create({ backdrop: { flex: 1, justifyContent: 'center', backgroundColor: '#000b', padding: 24 }, card: { backgroundColor: '#162033', padding: 24, borderRadius: 20, gap: 20 }, title: { color: '#f8fafc', fontSize: 18, fontWeight: '600' }, text: { color: '#94a3b8', lineHeight: 22 }, input: { color: '#f8fafc', borderWidth: 1, borderColor: '#475569', borderRadius: 12, padding: 16, fontSize: 22, letterSpacing: 2 }, button: { backgroundColor: '#164e63', padding: 16, borderRadius: 12, alignItems: 'center' }, link: { color: '#22d3ee', textAlign: 'center' } });

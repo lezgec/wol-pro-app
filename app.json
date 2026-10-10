@@ -2,15 +2,16 @@
   "expo": {
     "name": "WoL Pro",
     "slug": "wol-pro-app",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "dev.luiszamora.wolpro"
     },
     "android": {
+      "versionCode": 3,
       "predictiveBackGestureEnabled": false,
       "package": "dev.luiszamora.wolpro",
       "permissions": []
@@ -22,6 +23,27 @@
     "platforms": [
       "android",
       "ios"
+    ],
+    "plugins": [
+      "./plugins/withAndroidBuild",
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Permite que WoL Pro use Face ID para desbloquear tu sesión."
+        }
+      ],
+      "expo-iap",
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
+          "iosAppId": "ca-app-pub-3940256099942544~1458002511",
+          "delayAppMeasurementInit": true,
+          "androidSdk": "classic"
+        }
+      ]
     ]
   }
 }
