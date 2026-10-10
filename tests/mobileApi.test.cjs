@@ -85,3 +85,66 @@ test('device validation rejects incomplete and invalid IDs', () => {
   assert.equal(isDeviceList({ ...list, devices: [{ ...list.devices[0], id: -1 }] }), false);
   assert.equal(isDeviceList({ version: 1 }), false);
 });
+const { isControlData } = moduleStub.exports;
+test('control fetch keeps session and credentials inside trusted WebView', async () => {
+  const control = {version:1,pcs:[],server_time:123};
+  const {reply,calls} = await execute({kind:'control'}, [response(200, structuredClone(list)), response(200,control)]);
+  assert.equal(calls[1].url,'/api/mobile/v1/control');
+  assert.equal(calls[1].options.method,'GET');
+  assert.equal(reply.status,200);
+  assert.ok(isControlData(reply.body));
+});
+test('PC command preserves idempotency ID and never sends script text', async () => {
+  const action = {kind:'run',deviceId:1,commandKind:'launch',appKey:'catalog-id',requestId:'request-id'};
+  const {reply,calls} = await execute(action, [response(200, structuredClone(list)),response(202,{command_id:'queue-id'})]);
+  assert.equal(calls[1].url,'/api/mobile/v1/control/devices/1/run');
+  assert.equal(calls[1].options.headers['X-CSRF-Token'],list.csrf_token);
+  assert.deepEqual(JSON.parse(calls[1].options.body),{kind:'launch',app_key:'catalog-id',request_id:'request-id'});
+  assert.equal(reply.status,202);
+  assert.equal(calls.length,2);
+});
+test('command cancellation encodes an ID without navigating or retrying', async () => {
+  const {calls} = await execute({kind:'cancel',commandId:'../bad/id'},[response(200,structuredClone(list)),response(409,{})]);
+  assert.equal(calls[1].url,'/api/mobile/v1/control/commands/..%2Fbad%2Fid/cancel');
+  assert.equal(calls.length,2);
+});
+test('pair preview validates identity before separate authorization',async () => {
+  const {calls}=await execute({kind:'pairPreview',code:'ABCD-2345'},[response(200,structuredClone(list)),response(200,{computer_name:'Test PC'})]);
+  assert.equal(calls[1].url,'/api/mobile/v1/control/pair/preview');
+  assert.deepEqual(JSON.parse(calls[1].options.body),{code:'ABCD-2345'});
+});
+test('device deletion uses CSRF protected DELETE',async () => {
+  const {calls}=await execute({kind:'delete',deviceId:1},[response(200,structuredClone(list)),response(200,structuredClone(list))]);
+  assert.equal(calls[1].options.method,'DELETE');
+  assert.equal(calls[1].options.headers['X-CSRF-Token'],list.csrf_token);
+});
+test('control data rejects malformed catalogs and command permissions', () => {
+  const pc={id:'id',device_id:1,name:'PC',state:'ready',active:true,online:true,pc_online:true,last_seen:123,allow_shutdown:true,apps:[],actions:[],commands:[]};
+  assert.ok(isControlData({version:1,server_time:123,pcs:[pc]}));
+  assert.equal(isControlData({version:1,server_time:123,pcs:[{...pc,apps:[{name:'Missing ID'}]}]}),false);
+  assert.equal(isControlData({version:1,server_time:123,pcs:[{...pc,commands:[{id:'bad',can_cancel:'yes'}]}]}),false);
+});
+test('remember session is explicit and CSRF protected without sending a password',async () => {
+  const {reply,calls}=await execute({kind:'remember',enabled:true},[response(200,structuredClone(list)),response(200,{...structuredClone(list),remembered:true})]);
+  assert.equal(calls[1].url,'/api/mobile/v1/session/remember');
+  assert.equal(calls[1].options.headers['X-CSRF-Token'],list.csrf_token);
+  assert.deepEqual(JSON.parse(calls[1].options.body),{enabled:true});
+  assert.equal(reply.body.remembered,true);
+  assert.equal(reply.body.csrf_token,undefined);
+});
+
+
+test('plan purchase sends a receipt to the trusted backend and never a premium flag', async () => {
+  const {calls,reply} = await execute({kind:'purchase',purchaseToken:'test-receipt'}, [response(200,list), response(200,{version:1,plan:{tier:'premium'}})]);
+  assert.equal(calls[1].url,'/api/mobile/v1/plan/purchase');
+  assert.deepEqual(JSON.parse(calls[1].options.body),{purchase_token:'test-receipt'});
+  assert.equal(calls[1].options.headers['X-CSRF-Token'],'csrf-only-in-webview');
+  assert.equal(reply.status,200);
+});
+
+test('reward request obtains a ticket and cannot submit client completion as a reward', async () => {
+  const {calls} = await execute({kind:'adTicket',format:'rewarded'}, [response(200,list),response(200,{ticket:'temporary-ticket'})]);
+  assert.equal(calls[1].url,'/api/mobile/v1/ads/ticket');
+  assert.deepEqual(JSON.parse(calls[1].options.body),{kind:'rewarded'});
+  assert.equal(calls[1].options.credentials,'same-origin');
+});

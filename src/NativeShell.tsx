@@ -1,44 +1,52 @@
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import type { ReactNode } from 'react';
+import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { DevicesScreen } from './DevicesScreen';
 import type { Device, DeviceList } from './mobileApi';
-export type Tab = 'home' | 'devices' | 'account';
-type Props = { data: DeviceList; tab: Tab; onTab: (tab: Tab) => void; busy: boolean; onRefresh: () => void; onAdd: () => void; onEdit: (device: Device) => void; onAlexa: (device?: Device) => void; onLogout: () => void; backend: string };
+export type Tab = 'home' | 'devices' | 'control' | 'account';
+type Props = { showPlan: boolean; planScreen: ReactNode; banner: ReactNode; onPlan: () => void; onAdPrivacy: () => void; data: DeviceList; tab: Tab; onTab: (tab: Tab) => void; busy: boolean; onRefresh: () => void; onAdd: () => void; onEdit: (device: Device) => void; onAlexa: (device?: Device) => void; onLogout: () => void; backend: string; controlScreen: ReactNode; onControl: (device: Device) => void; onDelete: (device: Device) => void; biometricEnabled: boolean; biometricBusy: boolean; onBiometric: () => void; onRemember: () => void };
 
 function Icon({ kind, selected }: { kind: Tab; selected: boolean }) {
   const color = selected ? '#22d3ee' : '#64748b';
   return <View style={styles.iconBox}>
-    {kind === 'home' ? <><View style={[styles.roof, { borderColor: color }]} /><View style={[styles.house, { borderColor: color }]} /></>
+    {kind === 'control' ? <Text style={{ color, fontSize: 21, fontWeight: '700' }}>⌘</Text> : kind === 'home' ? <><View style={[styles.roof, { borderColor: color }]} /><View style={[styles.house, { borderColor: color }]} /></>
       : kind === 'devices' ? <><View style={[styles.monitor, { borderColor: color }]} /><View style={[styles.stand, { backgroundColor: color }]} /></>
       : <><View style={[styles.personHead, { borderColor: color }]} /><View style={[styles.personBody, { borderColor: color }]} /></>}
   </View>;
 }
-export function NativeShell({ data, tab, onTab, busy, onRefresh, onAdd, onEdit, onAlexa, onLogout, backend }: Props) {
+export function NativeShell({ showPlan, planScreen, banner, onPlan, onAdPrivacy, data, tab, onTab, busy, onRefresh, onAdd, onEdit, onAlexa, onLogout, backend, controlScreen, onControl, onDelete, biometricEnabled, biometricBusy, onBiometric, onRemember }: Props) {
   return <View style={styles.shell}>
+    <>{banner}</>
     <View style={styles.body}>
-      {tab === 'devices' ? <DevicesScreen data={data} busy={busy} wakingId={null} refreshing={busy} onRefresh={onRefresh} onWake={onAlexa} onAdd={onAdd} onEdit={onEdit} />
+      {showPlan ? planScreen : tab === 'control' ? controlScreen : tab === 'devices' ? <DevicesScreen data={data} busy={busy} wakingId={null} refreshing={busy} onRefresh={onRefresh} onWake={onAlexa} onAdd={onAdd} onEdit={onEdit} onControl={onControl} onDelete={onDelete} />
         : <ScrollView contentContainerStyle={styles.content}>
           {tab === 'home' ? <>
             <Text style={styles.eyebrow}>BIENVENIDO A WOL PRO</Text>
-            <Text style={styles.heading}>Tu espacio.{ '\n' }A una voz de distancia.</Text>
-            <Text style={styles.secondary}>Tus dispositivos, listos para conectar con Alexa.</Text>
+            <Text style={styles.heading}>Tu espacio.{ '\n' }Donde estés.</Text>
+            <Text style={styles.secondary}>Controla tus equipos desde cualquier conexión a Internet.</Text>
             <View style={styles.hero}><Text style={styles.number}>{data.devices.length.toString().padStart(2, '0')}</Text><Text style={styles.heroLabel}>{data.devices.length === 1 ? 'dispositivo registrado' : 'dispositivos registrados'}</Text>
               <Pressable accessibilityRole="button" onPress={() => onTab('devices')} style={styles.heroLink}><Text style={styles.link}>Ver mis dispositivos →</Text></Pressable></View>
             <Pressable accessibilityRole="button" disabled={busy} onPress={onAdd} style={styles.primary}><Text style={styles.primaryText}>+ Agregar dispositivo</Text></Pressable>
             <View style={styles.card}><View style={styles.row}><Text style={styles.cardTitle}>Alexa</Text><Text style={styles.badge}>{data.alexa_ready ? 'CUENTA VINCULADA' : 'VINCULACIÓN PENDIENTE'}</Text></View><Text style={styles.secondary}>{data.alexa_ready ? 'Tu cuenta está vinculada. Descubre tus dispositivos desde la app Alexa.' : 'Vincula tu cuenta con la skill de WoL Pro desde la app Alexa.'}</Text>
               <Pressable accessibilityRole="button" onPress={() => onAlexa()}><Text style={styles.link}>Cómo funciona →</Text></Pressable></View>
-            <View style={styles.soonCard}><Text style={styles.eyebrow}>PRÓXIMAMENTE</Text><Text style={styles.cardTitle}>Encendido directo</Text><Text style={styles.secondary}>Una nueva forma de encender tus dispositivos desde aquí.</Text></View>
+            <Pressable accessibilityRole="button" onPress={() => onTab('control')} style={styles.card}><Text style={styles.cardTitle}>Control remoto de Windows</Text><Text style={styles.secondary}>Abre aplicaciones, ejecuta comandos autorizados y consulta el historial, incluso desde datos móviles.</Text><Text style={styles.link}>Ir a Control →</Text></Pressable>
+
           </> : <>
             <Text style={styles.eyebrow}>TU CUENTA</Text><Text style={styles.heading}>Todo en un lugar.</Text>
+            <Pressable accessibilityRole="button" onPress={onPlan} style={styles.card}><Text style={styles.cardTitle}>Mi plan · {data.plan?.tier === 'premium' ? 'Premium' : 'Free'}</Text><Text style={styles.secondary}>Equipos activos, suscripción y pausas sin publicidad.</Text><Text style={styles.link}>Ver mi plan →</Text></Pressable>
+            {data.plan?.ads.enabled && <Pressable accessibilityRole="button" onPress={onAdPrivacy} style={styles.option}><Text style={styles.optionText}>Opciones de privacidad publicitaria</Text></Pressable>}
             <View style={styles.card}><View style={styles.avatar}><Icon kind="account" selected /></View><Text style={styles.cardTitle}>{data.email || 'Cuenta WoL Pro'}</Text><Text style={styles.secondary}>Sesión iniciada</Text></View>
             <View style={styles.card}><Text style={styles.cardTitle}>Vinculación con Alexa</Text><Text style={styles.secondary}>{data.alexa_ready ? 'Cuenta vinculada con Alexa.' : 'Vincula la skill de WoL Pro desde la app Alexa.'}</Text><Pressable accessibilityRole="button" onPress={() => onAlexa()}><Text style={styles.link}>Ver instrucciones</Text></Pressable></View>
+            <View style={styles.card}><Text style={styles.cardTitle}>Mantener sesión en este teléfono</Text><Text style={styles.secondary}>Conserva tu sesión hasta 30 días para entrar rápido. Cerrar sesión revoca este acceso. No guardamos tu contraseña.</Text><Pressable accessibilityRole="button" disabled={busy} onPress={onRemember}><Text style={styles.link}>{data.remembered ? 'Dejar de conservar la sesión' : 'Mantener sesión 30 días'}</Text></Pressable></View>
+            <View style={styles.card}><Text style={styles.cardTitle}>Acceso con biometría</Text><Text style={styles.secondary}>Desbloquea tu sesión con Face ID, huella o el código del teléfono. Activa Mantener sesión para conservarla al cerrar la app. Si caduca, deberás iniciar sesión otra vez.</Text><Pressable accessibilityRole="button" disabled={biometricBusy} onPress={onBiometric}><Text style={styles.link}>{biometricEnabled ? 'Desactivar bloqueo biométrico' : 'Activar acceso biométrico'}</Text></Pressable></View>
             <Pressable accessibilityRole="button" onPress={() => { void Linking.openURL(`${backend}/privacy`).catch(() => undefined); }} style={styles.option}><Text style={styles.optionText}>Política de privacidad</Text><Text style={styles.link}>↗</Text></Pressable>
             <Pressable accessibilityRole="button" onPress={() => { void Linking.openURL(`${backend}/terms`).catch(() => undefined); }} style={styles.option}><Text style={styles.optionText}>Términos de uso</Text><Text style={styles.link}>↗</Text></Pressable>
+            <Pressable accessibilityRole="button" onPress={() => { void Linking.openURL(`${backend}/account-deletion`).catch(() => { Alert.alert('Eliminación de cuenta', 'No pudimos abrir la página. Visita wol.luiszamora.dev/account-deletion desde tu navegador.'); }); }} style={styles.option}><Text style={styles.optionText}>Solicitar eliminación de cuenta</Text><Text style={styles.link}>↗</Text></Pressable>
             <Pressable accessibilityRole="button" disabled={busy} onPress={onLogout} style={styles.logout}><Text style={styles.logoutText}>Cerrar sesión</Text></Pressable>
           </>}
         </ScrollView>}
     </View>
     <View style={styles.nav}>
-      {([{ id: 'home', label: 'Inicio' }, { id: 'devices', label: 'Dispositivos' }, { id: 'account', label: 'Cuenta' }] as const).map(item => <Pressable key={item.id} accessibilityRole="tab" accessibilityState={{ selected: tab === item.id }} onPress={() => onTab(item.id)} style={[styles.navItem, tab === item.id && styles.navSelected]}>
+      {([{ id: 'home', label: 'Inicio' }, { id: 'devices', label: 'Dispositivos' }, { id: 'control', label: 'Control' }, { id: 'account', label: 'Cuenta' }] as const).map(item => <Pressable key={item.id} accessibilityRole="tab" accessibilityState={{ selected: tab === item.id }} onPress={() => onTab(item.id)} style={[styles.navItem, tab === item.id && styles.navSelected]}>
         <Icon kind={item.id} selected={tab === item.id} /><Text style={[styles.navLabel, tab === item.id && styles.navLabelSelected]}>{item.label}</Text>
       </Pressable>)}
     </View>
