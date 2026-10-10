@@ -4,7 +4,10 @@ import type { AccountPlan } from './mobileApi';
 type AdsSdk = typeof import('react-native-google-mobile-ads');
 let preparation: Promise<AdsSdk | null> | null = null;
 let presenting = false;
-export const adsBuildEnabled = () => process.env.EXPO_PUBLIC_ADS_MODE === 'live' || process.env.EXPO_PUBLIC_ADS_MODE === 'test';
+export const adsBuildEnabled = () => process.env.EXPO_PUBLIC_ADS_MODE === 'test' || (
+  process.env.EXPO_PUBLIC_ADS_MODE === 'live' &&
+  (process.env.EXPO_PUBLIC_ADS_PLATFORMS || 'android,ios').split(',').map((value: string) => value.trim()).includes(Platform.OS)
+);
 export const adsEligible = (plan?: AccountPlan) => !!plan && plan.tier === 'free' && plan.ads.enabled && plan.ad_free_until <= Date.now() / 1000 && adsBuildEnabled();
 
 function unit(sdk: AdsSdk, kind: 'banner' | 'rewarded' | 'interstitial') {
