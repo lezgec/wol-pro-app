@@ -18,6 +18,13 @@ test('biometric lock rejects an in-flight login and prevents new requests',()=>{
   const h=harness();h.render().loaded();h.lock();h.reply(1,{phase:'authenticated',data:{}});assert.equal(h.accepted.length,0);
   h.render().submit({kind:'session'});assert.equal(h.scripts.length,1);
 });
+
+test('Android origin-only message completes the request instead of showing an access timeout',()=>{
+  const h=harness();h.render().loaded();
+  const message=JSON.stringify({channel:'wol-native-auth-v1',page:'/mobile/bridge',id:1,status:200,body:{phase:'authenticated',data:{current:true}}});
+  assert.equal(h.render().receive('https://example.invalid',message),true);
+  assert.equal(h.accepted.length,1);assert.equal(h.render().busy,false);assert.equal(h.timers.size,0);
+});
 test('timeout, transport failure and incompatible data leave native access recoverable',()=>{
   const h=harness();h.render().loaded();[...h.timers.values()][0]();assert.equal(h.render().busy,false);assert.match(h.render().message,/conexión/);
   h.invalid();h.render().submit({kind:'session'});h.reply(2,{phase:'authenticated',data:{}});assert.match(h.render().message,/actualizarse/);

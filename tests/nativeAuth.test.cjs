@@ -36,3 +36,16 @@ test('messages from other origins and ordinary pages cannot authenticate the nat
   assert.equal(exportsAuth.parseAuthReply('https://example.invalid/login',message,'https://example.invalid'),null);
   assert.equal(exportsAuth.parseAuthReply('https://example.invalid/mobile/bridge',message,'https://example.invalid').id,1);
 });
+
+test('Android sourceOrigin replies authenticate only with the guarded bridge page marker',async()=>{
+  const h=await run({kind:'session'});
+  const text=JSON.stringify(h.messages[0]);
+  assert.equal(h.messages[0].page,'/mobile/bridge');
+  assert.equal(exportsAuth.parseAuthReply('https://example.invalid',text,'https://example.invalid').id,1);
+  assert.equal(exportsAuth.parseAuthReply('https://example.invalid/',text,'https://example.invalid').id,1);
+  const bare=JSON.stringify({...h.messages[0],page:undefined});
+  assert.equal(exportsAuth.parseAuthReply('https://example.invalid',bare,'https://example.invalid'),null);
+  for(const url of ['https://other.invalid/','https://example.invalid/login','https://example.invalid/?x=1','https://user@example.invalid/','https://example.invalid/#bridge']){
+    assert.equal(exportsAuth.parseAuthReply(url,text,'https://example.invalid'),null);
+  }
+});
