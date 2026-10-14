@@ -3,7 +3,7 @@ import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'r
 import { DevicesScreen } from './DevicesScreen';
 import type { Device, DeviceList } from './mobileApi';
 export type Tab = 'home' | 'devices' | 'control' | 'account';
-type Props = { showPlan: boolean; planScreen: ReactNode; banner: ReactNode; onPlan: () => void; onAdPrivacy: () => void; data: DeviceList; tab: Tab; onTab: (tab: Tab) => void; busy: boolean; onRefresh: () => void; onAdd: () => void; onEdit: (device: Device) => void; onAlexa: (device?: Device) => void; onLogout: () => void; backend: string; controlScreen: ReactNode; onControl: (device: Device) => void; onDelete: (device: Device) => void; biometricEnabled: boolean; biometricBusy: boolean; onBiometric: () => void; onRemember: () => void };
+type Props = { onTour: () => void; showPlan: boolean; planScreen: ReactNode; banner: ReactNode; onPlan: () => void; onAdPrivacy: () => void; data: DeviceList; tab: Tab; onTab: (tab: Tab) => void; busy: boolean; onRefresh: () => void; onAdd: () => void; onEdit: (device: Device) => void; onAlexa: (device?: Device) => void; onLogout: () => void; backend: string; controlScreen: ReactNode; onControl: (device: Device) => void; onDelete: (device: Device) => void; biometricEnabled: boolean; biometricBusy: boolean; onBiometric: () => void; onRemember: () => void };
 
 function Icon({ kind, selected }: { kind: Tab; selected: boolean }) {
   const color = selected ? '#22d3ee' : '#64748b';
@@ -13,7 +13,7 @@ function Icon({ kind, selected }: { kind: Tab; selected: boolean }) {
       : <><View style={[styles.personHead, { borderColor: color }]} /><View style={[styles.personBody, { borderColor: color }]} /></>}
   </View>;
 }
-export function NativeShell({ showPlan, planScreen, banner, onPlan, onAdPrivacy, data, tab, onTab, busy, onRefresh, onAdd, onEdit, onAlexa, onLogout, backend, controlScreen, onControl, onDelete, biometricEnabled, biometricBusy, onBiometric, onRemember }: Props) {
+export function NativeShell({ onTour, showPlan, planScreen, banner, onPlan, onAdPrivacy, data, tab, onTab, busy, onRefresh, onAdd, onEdit, onAlexa, onLogout, backend, controlScreen, onControl, onDelete, biometricEnabled, biometricBusy, onBiometric, onRemember }: Props) {
   return <View style={styles.shell}>
     <>{banner}</>
     <View style={styles.body}>
@@ -23,6 +23,7 @@ export function NativeShell({ showPlan, planScreen, banner, onPlan, onAdPrivacy,
             <Text style={styles.eyebrow}>BIENVENIDO A WOL PRO</Text>
             <Text style={styles.heading}>Tu espacio.{ '\n' }Donde estés.</Text>
             <Text style={styles.secondary}>Controla tus equipos desde cualquier conexión a Internet.</Text>
+            <Pressable accessibilityRole="button" disabled={busy} onPress={onTour} style={styles.option}><Text style={styles.link}>Tour de WoL Pro →</Text></Pressable>
             <View style={styles.hero}><Text style={styles.number}>{data.devices.length.toString().padStart(2, '0')}</Text><Text style={styles.heroLabel}>{data.devices.length === 1 ? 'dispositivo registrado' : 'dispositivos registrados'}</Text>
               <Pressable accessibilityRole="button" onPress={() => onTab('devices')} style={styles.heroLink}><Text style={styles.link}>Ver mis dispositivos →</Text></Pressable></View>
             <Pressable accessibilityRole="button" disabled={busy} onPress={onAdd} style={styles.primary}><Text style={styles.primaryText}>+ Agregar dispositivo</Text></Pressable>
@@ -32,6 +33,7 @@ export function NativeShell({ showPlan, planScreen, banner, onPlan, onAdPrivacy,
 
           </> : <>
             <Text style={styles.eyebrow}>TU CUENTA</Text><Text style={styles.heading}>Todo en un lugar.</Text>
+            <Pressable accessibilityRole="button" disabled={busy} onPress={onTour} style={styles.option}><Text style={styles.optionText}>Tour de WoL Pro</Text><Text style={styles.link}>Ver / retomar →</Text></Pressable>
             <Pressable accessibilityRole="button" onPress={onPlan} style={styles.card}><Text style={styles.cardTitle}>Mi plan · {data.plan?.tier === 'premium' ? 'Premium' : 'Free'}</Text><Text style={styles.secondary}>Equipos activos, suscripción y pausas sin publicidad.</Text><Text style={styles.link}>Ver mi plan →</Text></Pressable>
             {data.plan?.ads.enabled && <Pressable accessibilityRole="button" onPress={onAdPrivacy} style={styles.option}><Text style={styles.optionText}>Opciones de privacidad publicitaria</Text></Pressable>}
             <View style={styles.card}><View style={styles.avatar}><Icon kind="account" selected /></View><Text style={styles.cardTitle}>{data.email || 'Cuenta WoL Pro'}</Text><Text style={styles.secondary}>Sesión iniciada</Text></View>

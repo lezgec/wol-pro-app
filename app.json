@@ -2,7 +2,7 @@
   "expo": {
     "name": "WoL Pro",
     "slug": "wol-pro-app",
-    "version": "1.1.0",
+    "version": "1.1.3",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -11,7 +11,7 @@
       "bundleIdentifier": "dev.luiszamora.wolpro"
     },
     "android": {
-      "versionCode": 3,
+      "versionCode": 5,
       "predictiveBackGestureEnabled": false,
       "package": "dev.luiszamora.wolpro",
       "permissions": []

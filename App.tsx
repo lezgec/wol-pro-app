@@ -1,15 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, ActivityIndicator, Alert, BackHandler, Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AppState, ActivityIndicator, Alert, BackHandler, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { WebView } from 'react-native-webview';
 import { Slot, router, usePathname } from 'expo-router';
 import { PlanScreen } from './src/PlanScreen';
-import { MobileBanner, adsEligible, showFullscreen, adPrivacyOptions } from './src/mobileAds';
+import { MobileBanner, adPlacementAllowed, showFullscreen, adPrivacyOptions, prepareInterstitial, clearInterstitial, interstitialReady } from './src/mobileAds';
 import { ControlScreen } from './src/ControlScreen';
 import { PairEditor } from './src/PairEditor';
 import { useBiometricLock } from './src/useBiometricLock';
 import { NativeShell, type Tab } from './src/NativeShell';
+import { useAppTour } from './src/useAppTour';
+import { AppTour } from './src/AppTour';
+import { AuthScreen } from './src/AuthScreen';
+import { useNativeAuth } from './src/useNativeAuth';
 import { DeviceEditor } from './src/DeviceEditor';
 import { isAccountPlan, isControlData, type ControlData, isDeviceList, parseReply, requestScript, type Device, type DeviceList, type MobileAction } from './src/mobileApi';
 
@@ -20,7 +24,6 @@ if (backend.protocol !== 'https:' || backend.username || backend.password) {
 
 export default function App() {
   const webView = useRef<WebView>(null);
-  const [canGoBack, setCanGoBack] = useState(false);
   const [failed, setFailed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [attempt, setAttempt] = useState(0);
@@ -30,16 +33,25 @@ export default function App() {
   const planRef = useRef(devices?.plan); planRef.current = devices?.plan;
   const hasPendingCommands = useRef(false);
   const [busy, setBusy] = useState(false);
+  const [watchingReward, setWatchingReward] = useState(false);
   const pathname = usePathname();
   const tab: Tab = pathname === '/devices' ? 'devices' : pathname === '/control' ? 'control' : (pathname === '/account' || pathname === '/plan') ? 'account' : 'home';
   const setTab = (value: Tab) => {
-    const naturalPause = tab === 'devices' && value === 'home' && Date.now() - sessionStarted.current >= 600000;
+    const naturalPause = tab === 'devices' && value === 'home' && Date.now() - sessionStarted.current >= Math.max(600, planRef.current?.ads.interval_seconds || 600) * 1000;
     router.replace(value === 'home' ? '/' : `/${value}`);
-    if (naturalPause && !busy && !hasPendingCommands.current && adsEligible(planRef.current) && planRef.current?.ads.interstitial) {
-      void requestAccount({ kind: 'adTicket', format: 'interstitial' }).then(data => typeof data.ticket === 'string' ? showFullscreen('interstitial', data.ticket, () => accessRef.current && !pending.current && !hasPendingCommands.current && adsEligible(planRef.current), () => requestAccount({ kind: 'plan' }).then(fresh => isAccountPlan(fresh.plan) && adsEligible(fresh.plan))) : false).catch(() => undefined);
+    if (naturalPause && interstitialReady() && !busy && !watchingReward && !hasPendingCommands.current && !adContext.current.blocked && adPlacementAllowed(planRef.current, 'interstitial', 'home')) {
+      void requestAccount({ kind: 'adTicket', format: 'interstitial' }).then(data => typeof data.ticket === 'string' ? showFullscreen('interstitial', data.ticket, () => canShowAd('interstitial', 'home'), () => beforeAdShow('interstitial', 'home')) : false).catch(() => undefined).finally(() => { if (canShowAd('interstitial', 'home')) void prepareInterstitial(); });
     }
   };
   const lock = useBiometricLock();
+  const interstitialEligible = adPlacementAllowed(devices?.plan, 'interstitial', 'home');
+  useEffect(() => {
+    if (!native || loading || !lock.ready || lock.locked || !interstitialEligible) { clearInterstitial(); return; }
+    if (AppState.currentState === 'active') void prepareInterstitial();
+    const timer = setInterval(() => { if (AppState.currentState === 'active') { interstitialReady(); void prepareInterstitial(); } }, 60000);
+    const subscription = AppState.addEventListener('change', state => { if (state === 'active') void prepareInterstitial(); else clearInterstitial(); });
+    return () => { clearInterval(timer); subscription.remove(); clearInterstitial(); };
+  }, [native, loading, lock.ready, lock.locked, interstitialEligible]);
   const [control, setControl] = useState<ControlData | null>(null);
   hasPendingCommands.current = !!control?.pcs.some(pc => pc.commands.some(c => ['pending','claimed','scheduled'].includes(c.status)));
   const [controlError, setControlError] = useState<string | null>(null);
@@ -51,16 +63,26 @@ export default function App() {
   const accessRef = useRef(false);
   const needsUnlockRefresh = useRef(true);
   accessRef.current = lock.ready && !lock.locked;
+  const auth = useNativeAuth(backend.origin, webView, () => accessRef.current, data => {
+    if (!isDeviceList(data)) return false;
+    setDevices(data); setNative(true); setLoading(false); setFailed(false); setTab('home');
+    return true;
+  });
+  const authRef = useRef(auth); authRef.current = auth;
   useEffect(() => {
-    if (lock.locked) { accountRequestRef.current?.reject(new Error('Desbloquea la app para continuar.')); accountRequestRef.current = null; if (pending.current) clearTimeout(pending.current.timer); pending.current = null; setBusy(false); }
+    if (lock.locked) { authRef.current.cancel(); accountRequestRef.current?.reject(new Error('Desbloquea la app para continuar.')); accountRequestRef.current = null; if (pending.current) clearTimeout(pending.current.timer); pending.current = null; setBusy(false); }
   }, [lock.locked]);
   useEffect(() => {
     if (lock.locked) needsUnlockRefresh.current = true;
     else if (lock.ready && !loading && needsUnlockRefresh.current) {
+      if (!native) {
+        if (auth.ready) { needsUnlockRefresh.current = false; authRef.current.submit({ kind:'session' }); }
+        return;
+      }
       needsUnlockRefresh.current = false;
       requestRef.current({ kind: native && tab === 'control' ? 'control' : 'devices' }, true);
     }
-  }, [lock.locked, lock.ready, loading, native, tab]);
+  }, [lock.locked, lock.ready, loading, native, tab, auth.ready]);
   useEffect(() => {
     if (!native || tab !== 'control' || !lock.ready || lock.locked) return;
     requestRef.current({ kind: 'control' }, true);
@@ -75,9 +97,12 @@ export default function App() {
   }, [native, lock.ready, lock.locked]);
   const [editing, setEditing] = useState<Device | 'new' | null>(null);
   const [editorError, setEditorError] = useState<string | null>(null);
+  const tour = useAppTour(native && devices?.email ? backend.origin + '|' + devices.email : null,
+    native && lock.ready && !lock.locked && !loading && !failed && !editing && !pairing && !busy && !watchingReward && !hasPendingCommands.current && pathname !== '/plan');
+  const adContext = useRef({ view: pathname === '/plan' ? 'plan' : tab, blocked: false });
+  adContext.current = { view: pathname === '/plan' ? 'plan' : tab, blocked: !!editing || !!pairing || loading || failed || !native || tour.active };
   const sequence = useRef(0);
   const pending = useRef<{ id: number; action: MobileAction; automatic: boolean; timer: ReturnType<typeof setTimeout> } | null>(null);
-  const managing = useRef(false);
   const accountRequestRef = useRef<{ resolve: (data: Record<string, unknown>) => void; reject: (error: Error) => void } | null>(null);
   const requestAccount = useCallback((action: MobileAction) => new Promise<Record<string, unknown>>((resolve, reject) => {
     if (!accessRef.current || !webView.current || (pending.current && !pending.current.automatic) || accountRequestRef.current) { reject(new Error('Espera a que termine la operación actual.')); return; }
@@ -85,6 +110,14 @@ export default function App() {
     requestRef.current(action);
     if (!pending.current) { accountRequestRef.current = null; reject(new Error('No se pudo enviar la solicitud.')); }
   }), []);
+  const canShowAd = (format: 'rewarded' | 'interstitial', view: string) => AppState.currentState === 'active' && accessRef.current && !pending.current && !hasPendingCommands.current && !adContext.current.blocked && adContext.current.view === view && adPlacementAllowed(planRef.current, format, view);
+  const beforeAdShow = async (format: 'rewarded' | 'interstitial', view: string) => {
+    // Orders from Alexa or the web may have arrived since the last Control read.
+    const freshControl = await requestAccount({ kind: 'control' });
+    if (!isControlData(freshControl) || freshControl.pcs.some(pc => pc.commands.some(command => ['pending', 'claimed', 'scheduled'].includes(command.status)))) return false;
+    const fresh = await requestAccount({ kind: 'plan' });
+    return isAccountPlan(fresh.plan) && adPlacementAllowed(fresh.plan, format, view) && canShowAd(format, view);
+  };
   const cancelRequest = () => {
     accountRequestRef.current?.reject(new Error('La conexión se interrumpió. Actualiza Mi plan o restaura la compra para confirmar el resultado.'));
     accountRequestRef.current = null;
@@ -125,16 +158,16 @@ export default function App() {
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
       if (native) { if (tab !== 'home') { setTab('home'); return true; } return false; }
-      if (!canGoBack || failed) return false;
-      webView.current?.goBack();
-      return true;
+      if (failed) return false;
+      if (!native && auth.phase !== 'login') { auth.changePhase('login'); return true; }
+      return !native && auth.busy;
     });
     return () => subscription.remove();
-  }, [canGoBack, failed, native, tab]);
+  }, [failed, native, tab, auth.phase, auth.busy, auth.changePhase]);
   const retry = () => {
-    cancelRequest(); setNative(false); setDevices(null); setEditing(null); setTab('home'); managing.current = false;
+    cancelRequest(); auth.loading(); setNative(false); setDevices(null); setEditing(null); setTab('home');
     setControl(null); setControlError(null); setPairing(null);
-    setFailed(false); setLoading(true); setCanGoBack(false);
+    setFailed(false); setLoading(true);
     setAttempt(value => value + 1);
   };
   return (
@@ -145,43 +178,35 @@ export default function App() {
         <View style={styles.header}>
           <View style={styles.actions}><Image source={require('./assets/icon.png')} style={styles.logo} /><Text style={styles.brand}>WoL <Text style={styles.accent}>Pro</Text></Text></View>
           <View style={styles.actions}>
-            {!native && devices && <Pressable accessibilityRole="button" disabled={busy || loading} onPress={() => { managing.current = false; request({ kind: 'devices' }); }}><Text style={styles.action}>Equipos</Text></Pressable>}
-            <Pressable accessibilityRole="button" disabled={busy} accessibilityLabel="Actualizar" onPress={() => native ? request({ kind: tab === 'control' ? 'control' : 'devices' }) : retry()}>
-              <Text style={styles.action}>{native ? 'Actualizar' : 'Recargar'}</Text>
+            <Pressable accessibilityRole="button" disabled={busy || auth.busy} accessibilityLabel="Actualizar" onPress={() => native ? request({ kind: tab === 'control' ? 'control' : 'devices' }) : retry()}>
+              <Text style={styles.action}>{native ? 'Actualizar' : 'Reintentar conexión'}</Text>
             </Pressable>
           </View>
         </View>
         {lock.ready && <View pointerEvents={lock.locked ? 'none' : 'auto'} accessibilityElementsHidden={lock.locked} importantForAccessibility={lock.locked ? 'no-hide-descendants' : 'auto'} style={styles.content}>
           {failed ? (
             <View style={styles.message}>
-              <Text style={styles.title}>No pudimos cargar el panel</Text>
+              <Text style={styles.title}>No pudimos conectar con WoL Pro</Text>
               <Text style={styles.description}>Comprueba tu conexión e inténtalo de nuevo.</Text>
               <Pressable accessibilityRole="button" onPress={retry} style={styles.button}>
                 <Text style={styles.buttonText}>Reintentar</Text>
               </Pressable>
             </View>
           ) : (
-            <View pointerEvents={native ? 'none' : 'auto'} style={native ? styles.hiddenWeb : styles.content}>
-            <WebView key={attempt} ref={webView} source={{ uri: backend.href }} style={styles.content}
-              accessibilityElementsHidden={native} importantForAccessibility={native ? 'no-hide-descendants' : 'auto'}
+            <View pointerEvents="none" style={styles.hiddenWeb}>
+            <WebView key={attempt} ref={webView} source={{ uri: backend.origin + '/mobile/bridge' }} style={styles.content}
+              accessibilityElementsHidden importantForAccessibility="no-hide-descendants"
               originWhitelist={['https://*']} mixedContentMode="never"
               javaScriptCanOpenWindowsAutomatically={false} setSupportMultipleWindows={false}
               sharedCookiesEnabled thirdPartyCookiesEnabled={false}
-              onNavigationStateChange={state => {
-                setCanGoBack(state.canGoBack);
-                try {
-                  if (new URL(state.url).pathname === '/login' || new URL(state.url).pathname === '/logout') {
-                    cancelRequest(); setDevices(null); setNative(false); setEditing(null); setTab('home'); managing.current = false;
-                  }
-                } catch { /* Ignore incomplete navigation URLs. */ }
-              }}
-              onLoadStart={() => { cancelRequest(); setLoading(true); }}
+              onLoadStart={() => { cancelRequest(); auth.loading(); setLoading(true); }}
               onLoadEnd={() => setLoading(false)}
               onLoad={event => {
                 const url = new URL(event.nativeEvent.url);
-                if (url.origin === backend.origin && url.pathname === '/' && !managing.current) request({ kind: 'devices' }, true);
+                if (url.origin === backend.origin && url.pathname === '/mobile/bridge') auth.loaded();
               }}
               onMessage={event => {
+                if (auth.receive(event.nativeEvent.url, event.nativeEvent.data)) return;
                 const reply = parseReply(event.nativeEvent.url, event.nativeEvent.data, backend.origin);
                 if (!accessRef.current || !reply || reply.id !== pending.current?.id) return;
                 const operation = pending.current;
@@ -201,13 +226,13 @@ export default function App() {
                   return;
                 }
                 if (reply.status === 401) {
-                  setDevices(null); setControl(null); setPairing(null); setNative(false); setEditing(null); setTab('home'); managing.current = false;
-                  webView.current?.injectJavaScript(`location.href = '/login'; true;`);
+                  setDevices(null); setControl(null); setPairing(null); setNative(false); setEditing(null); setTab('home');
+                  auth.reset();
                   return;
                 }
                 if (operation.action.kind === 'logout' && reply.status === 200) {
                   setDevices(null); setControl(null); setPairing(null); setNative(false); setTab('home');
-                  webView.current?.injectJavaScript(`location.href = '/login'; true;`);
+                  auth.reset();
                   return;
                 }
                 if ((operation.action.kind === 'devices' || operation.action.kind === 'create' || operation.action.kind === 'update' || operation.action.kind === 'delete' || operation.action.kind === 'remember')
@@ -249,7 +274,7 @@ export default function App() {
                 if (!operation.automatic) Alert.alert(operation.action.kind === 'wake' && reply.status === 200 ? 'Orden enviada' : 'Aviso',
                   typeof body?.message === 'string' ? body.message : 'No se pudo completar la operación. Puedes usar el panel web.');
               }}
-              onError={() => { cancelRequest(); setNative(false); setLoading(false); setFailed(true); }}
+              onError={() => { cancelRequest(); auth.loading(); setNative(false); setLoading(false); setFailed(true); }}
               onHttpError={event => {
                 if (event.nativeEvent.statusCode >= 500) { setLoading(false); setFailed(true); }
               }}
@@ -259,25 +284,26 @@ export default function App() {
                 if (request.url === 'about:blank') return true;
                 let target: URL;
                 try { target = new URL(request.url); } catch { return false; }
-                if (target.origin === backend.origin && !target.username && !target.password) return true;
-                if (target.protocol === 'https:' || target.protocol === 'mailto:') {
-                  void Linking.openURL(request.url).catch(() => undefined);
-                }
+                if (target.origin === backend.origin && !target.username && !target.password && target.pathname === '/mobile/bridge' && !target.search && !target.hash) return true;
                 return false;
               }} />
             </View>
           )}
           {native && devices && <NativeShell showPlan={pathname === '/plan'} onPlan={() => router.push('/plan')}
-            banner={!lock.locked && devices.plan?.ads.allowed_views?.includes(pathname === '/plan' ? 'plan' : tab) && <MobileBanner plan={devices.plan} />}
+            onTour={() => { if (!busy && !watchingReward && !hasPendingCommands.current) tour.start(); }}
+            banner={!tour.active && !lock.locked && devices.plan?.ads.allowed_views?.includes(pathname === '/plan' ? 'plan' : tab) && <MobileBanner plan={devices.plan} />}
             onAdPrivacy={() => { void adPrivacyOptions().catch(() => Alert.alert('Aviso', 'No se pudieron abrir las opciones de publicidad.')); }}
-            planScreen={<PlanScreen plan={devices.plan} devices={devices.devices} busy={busy} request={requestAccount} onRefresh={() => request({ kind: 'devices' })} onClose={() => router.replace('/account')} onReward={() => {
-              if (!adsEligible(planRef.current) || hasPendingCommands.current) { Alert.alert('Aviso', 'Espera a que terminen las órdenes del PC antes de ver el video.'); return; }
+            planScreen={<PlanScreen plan={devices.plan} devices={devices.devices} busy={busy} rewardBusy={watchingReward} accessReady={lock.ready && !lock.locked && !loading} request={requestAccount} onRefresh={() => request({ kind: 'devices' })} onClose={() => router.replace('/account')} onReward={() => {
+              if (watchingReward) return;
+              if (!adPlacementAllowed(planRef.current, 'rewarded', 'plan')) { Alert.alert('Video no disponible', 'Los videos con recompensa no están disponibles ahora. Actualiza Mi plan para comprobarlo.'); return; }
+              if (hasPendingCommands.current) { Alert.alert('Aviso', 'Espera a que terminen las órdenes del PC antes de ver el video.'); return; }
+              setWatchingReward(true);
               void requestAccount({ kind: 'adTicket', format: 'rewarded' }).then(async data => {
                 if (typeof data.ticket !== 'string') return;
-                const earned = await showFullscreen('rewarded', data.ticket, () => accessRef.current && !pending.current && !hasPendingCommands.current && adsEligible(planRef.current), () => requestAccount({ kind: 'plan' }).then(fresh => isAccountPlan(fresh.plan) && adsEligible(fresh.plan)));
+                const earned = await showFullscreen('rewarded', data.ticket, () => canShowAd('rewarded', 'plan'), () => beforeAdShow('rewarded', 'plan'));
                 if (earned) Alert.alert('Video completado', 'Estamos verificando tu recompensa. Actualiza Mi plan para ver los 30 minutos sin publicidad.');
                 requestRef.current({ kind: 'devices' }, true);
-              }).catch(e => Alert.alert('Video no disponible', e.message));
+              }).catch(e => Alert.alert('Video no disponible', e.message)).finally(() => setWatchingReward(false));
             }} />}
             data={devices} tab={tab} onTab={setTab} busy={busy}
             onRefresh={() => request({ kind: tab === 'control' ? 'control' : 'devices' })} onAlexa={alexaInstructions}
@@ -293,8 +319,9 @@ export default function App() {
           {!lock.locked && native && editing && <DeviceEditor key={editing === 'new' ? 'new' : editing.id} device={editing} busy={busy} error={editorError}
             onClose={() => { setEditing(null); setEditorError(null); }}
             onSave={(name, mac) => { setEditorError(null); request(editing === 'new' ? { kind: 'create', name, mac } : { kind: 'update', deviceId: editing.id, name, mac }); }} />}
-          {loading && !failed && !native && <View pointerEvents="none" style={styles.loading}><ActivityIndicator color="#38bdf8" /><Text style={styles.description}>Cargando panel…</Text></View>}
+          {!lock.locked && !native && !failed && <AuthScreen key={auth.phase} phase={auth.phase} busy={auth.busy} ready={auth.ready && !loading} message={auth.message} onPhase={auth.changePhase} onSubmit={auth.submit} />}
         </View>}
+        <AppTour visible={tour.visible} index={tour.index} onClose={tour.close} onMove={tour.move} onFinish={tour.finish} onDestination={destination => router.push(destination === 'home' ? '/' : `/${destination}`)} />
         {(!lock.ready || lock.locked) && <View style={styles.lock} accessibilityViewIsModal>
           <Image source={require('./assets/icon.png')} style={{ width: 88, height: 88, borderRadius: 24 }} />
           <Text style={styles.title}>Tu acceso a WoL Pro</Text>
@@ -320,5 +347,4 @@ const styles = StyleSheet.create({
   description: { color: '#94a3b8', textAlign: 'center' },
   button: { backgroundColor: '#38bdf8', borderRadius: 12, paddingHorizontal: 24, paddingVertical: 14 },
   buttonText: { color: '#0f172a', fontWeight: '700' },
-  loading: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: '#0f172a', justifyContent: 'center', alignItems: 'center', gap: 12 },
 });

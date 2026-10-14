@@ -1,4 +1,4 @@
-const { withAppBuildGradle, withGradleProperties } = require('expo/config-plugins');
+const { withAndroidManifest, withAppBuildGradle, withGradleProperties } = require('expo/config-plugins');
 
 const windowsBuild = `
     // WoL Pro Windows native build: short CMake paths for Ninja.
@@ -17,6 +17,18 @@ const windowsBuild = `
 `;
 
 module.exports = function withAndroidBuild(config) {
+  config = withAndroidManifest(config, config => {
+    const permission = 'com.google.android.gms.permission.AD_ID';
+    // Non-clean prebuild keeps the removal marker from an earlier off build.
+    // Explicitly undo it only when the current build permits advertising IDs.
+    if (!config.android?.blockedPermissions?.includes(permission)) {
+      const manifest = config.modResults.manifest;
+      const entries = (manifest['uses-permission'] || []).filter(item => !(item.$['android:name'] === permission && item.$['tools:node'] === 'remove'));
+      if (!entries.some(item => item.$['android:name'] === permission)) entries.push({ $: { 'android:name': permission } });
+      manifest['uses-permission'] = entries;
+    }
+    return config;
+  });
   config = withGradleProperties(config, config => {
     const properties = config.modResults;
     const jvm = properties.find(item => item.type === 'property' && item.key === 'org.gradle.jvmargs');

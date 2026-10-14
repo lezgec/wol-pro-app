@@ -22,13 +22,14 @@ export function DevicesScreen({ data, refreshing, busy, wakingId, onRefresh, onW
           <Text style={styles.name}>{item.name}</Text><Text style={styles.mac}>{item.mac}</Text>
         </View></View>
 <Text style={styles.secondary}>{stateLabels[item.agent_state || 'unlinked']}</Text>
-        <View style={styles.row}><Text style={[styles.method, { flex: 1 }]}>{item.wake_method === 'alexa' ? 'Con Alexa' : 'Encendido directo · Próximamente'}</Text>
+        {data.plan && !data.plan.active_devices.includes(item.id) && <Text style={styles.secondary}>Equipo guardado sin acceso activo. Selecciónalo en Mi plan o activa Premium.</Text>}
+        <View style={styles.row}><Text style={[styles.method, { flex: 1 }]}>{item.wake_method === 'alexa' ? 'Con Alexa' : 'Método antiguo de encendido'}</Text>
           <Pressable accessibilityRole="button" accessibilityLabel={`Editar ${item.name}`} disabled={busy} onPress={() => onEdit(item)}><Text style={styles.link}>Editar</Text></Pressable>
         </View>
         <Pressable accessibilityRole="button" onPress={() => onControl(item)} style={styles.button}><Text style={styles.buttonText}>Control de PC / Vincular agente</Text></Pressable>
         <Pressable accessibilityRole="button" disabled={busy} onPress={() => onDelete(item)}><Text style={{ color: '#fda4af' }}>Eliminar equipo</Text></Pressable>
         <Pressable accessibilityRole="button" disabled={busy || item.wake_method !== 'alexa'} onPress={() => onWake(item)} style={[styles.button, (busy || item.wake_method !== 'alexa') && styles.disabled]}>
-          {wakingId === item.id ? <ActivityIndicator color="#082f49" /> : <Text style={styles.buttonText}>{item.wake_method === 'alexa' ? 'Cómo encender con Alexa' : 'Próximamente'}</Text>}
+          {wakingId === item.id ? <ActivityIndicator color="#082f49" /> : <Text style={styles.buttonText}>{item.wake_method === 'alexa' ? 'Cómo encender con Alexa' : 'Encendido no disponible'}</Text>}
         </Pressable>
       </View>}
       ListFooterComponent={<View style={styles.footer}>

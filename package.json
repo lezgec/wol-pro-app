@@ -1,6 +1,6 @@
 {
   "name": "wol-pro-app",
-  "version": "1.1.0",
+  "version": "1.1.3",
   "main": "expo-router/entry",
   "dependencies": {
     "expo": "~57.0.27",
@@ -34,7 +34,7 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "typecheck": "tsc --noEmit",
-    "test": "node --test tests/mobileApi.test.cjs tests/biometricLock.test.cjs",
+    "test": "node --test tests/mobileApi.test.cjs tests/biometricLock.test.cjs tests/restorePurchases.test.cjs tests/subscriptionStatus.test.cjs tests/purchaseRecovery.test.cjs tests/mobileAds.test.cjs tests/tour.test.cjs tests/nativeAuth.test.cjs tests/nativeAuthHook.test.cjs",
     "lint": "expo lint"
   },
   "private": true,

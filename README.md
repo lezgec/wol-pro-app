@@ -2,11 +2,11 @@
 
 App móvil Android e iOS con Expo, React Native y TypeScript. Reutiliza el panel Flask en Azure: https://wol.luiszamora.dev.
 
-Después de iniciar sesión, la app muestra navegación inferior nativa: Inicio, Dispositivos, Control y Cuenta. Incluye formularios nativos para agregar y editar nombre/MAC, eliminación y estado de dispositivos, instrucciones Alexa y cierre de sesión. Control permite vincular el agente por código, ejecutar aplicaciones/comandos autorizados, solicitar apagado protegido, guardar/eliminar acciones compartidas con el panel y Alexa, consultar historial y cancelar órdenes pendientes o apagados en cuenta atrás. El acceso y registro de cuentas siguen en el panel web. Incluye área segura, carga, recuperación de errores y navegación atrás Android. Los enlaces externos se abren en el navegador del sistema.
+Después de iniciar sesión, la app muestra navegación inferior nativa: Inicio, Dispositivos, Control y Cuenta. Incluye formularios nativos para agregar y editar nombre/MAC, eliminación y estado de dispositivos, instrucciones Alexa y cierre de sesión. Control permite vincular el agente por código, ejecutar aplicaciones/comandos autorizados, solicitar apagado protegido, guardar/eliminar acciones compartidas con el panel y Alexa, consultar historial y cancelar órdenes pendientes o apagados en cuenta atrás. El acceso, registro, verificación por correo y recuperación de contraseña también usan formularios nativos. Incluye área segura, carga, recuperación de errores y navegación atrás Android. Los enlaces de información externos se abren en el navegador del sistema.
 
-La API `/api/mobile/v1/devices` permite listar/crear dispositivos y `/api/mobile/v1/devices/{id}` editar/eliminar los propios. `/api/mobile/v1/control` expone el catálogo, presencia, acciones e historial del agente. Las órdenes viajan por HTTPS a la cola existente de Azure, sin depender de la red local del teléfono. Las solicitudes se ejecutan mediante un puente en la WebView del mismo origen; la cookie HttpOnly y el token CSRF permanecen allí. No se crean tokens móviles persistentes ni se copian contraseñas. La app valida el origen y correlaciona respuestas; no reintenta escrituras automáticamente.
+La API `/api/mobile/v1/devices` permite listar/crear dispositivos y `/api/mobile/v1/devices/{id}` editar/eliminar los propios. `/api/mobile/v1/control` expone el catálogo, presencia, acciones e historial del agente. Las órdenes viajan por HTTPS a la cola existente de Azure, sin depender de la red local del teléfono. Las solicitudes se ejecutan mediante un puente en la WebView del mismo origen; la cookie HttpOnly y el token CSRF permanecen allí. No se crean tokens móviles persistentes ni se guardan contraseñas. La app valida el origen y correlaciona respuestas; no reintenta escrituras automáticamente.
 
-La pantalla nativa requiere el backend actualizado. Si la API aún no está disponible, se mantiene el panel web. Router por Internet aparece deshabilitado como «Próximamente», sin campos IP/puerto. Los nuevos dispositivos usan Alexa; al editar se conserva el método existente. La API móvil también bloquea el encendido directo, aunque un cliente anterior lo intente. Alexa muestra instrucciones y el estado real de vinculación.
+La pantalla nativa requiere el backend actualizado, incluidas las rutas de [acceso nativo](NATIVE_AUTH.md). Si la API aún no está disponible, se muestra un error de conexión. Router por Internet aparece deshabilitado como «Próximamente», sin campos IP/puerto. Los nuevos dispositivos usan Alexa; al editar se conserva el método existente. La API móvil también bloquea el encendido directo, aunque un cliente anterior lo intente. Alexa muestra instrucciones y el estado real de vinculación.
 
 Control actualiza el estado en segundo plano sin mostrar el indicador de recarga ni deshabilitar botones durante las consultas automáticas. El indicador aparece al actualizar manualmente. Si falla una consulta, conserva la última información y muestra un aviso; las nuevas órdenes quedan deshabilitadas hasta confirmar de nuevo el estado, pero se permite intentar cancelar una orden conocida. Las acciones del usuario tienen prioridad sobre una consulta automática pendiente.
 
@@ -40,7 +40,7 @@ Antes de distribuir, probar en ambos sistemas: registro y verificación, acceso 
 
 La auditoría actual de npm reporta 28 avisos transitivos (10 moderados y 18 altos) en las dependencias de Expo/React Native. `npm audit fix` no los resuelve; no debe aplicarse una corrección forzada que cambie a versiones incompatibles con este SDK. Revisarlos y actualizar el SDK o sus dependencias compatibles antes de distribuir.
 
-Amazon abre el navegador externo. El retorno autenticado a la app requiere un flujo móvil con navegador del sistema y enlace de retorno; por ahora usar correo y contraseña. La vinculación Alexa existente se administra en el panel web.
+El acceso móvil usa correo y contraseña. Amazon OAuth móvil queda pendiente; la vinculación Alexa existente se administra en el panel web.
 
 ## Compilación
 
@@ -55,7 +55,7 @@ Preview genera APK Android. iOS y tiendas requieren cuentas de desarrollador, fi
 
 ### Android independiente del servidor de desarrollo
 
-La variante `release` incluye el código JavaScript y los recursos dentro del APK. Se conecta por HTTPS a Azure y no necesita Expo/Metro, el ordenador de desarrollo ni estar en la misma red local. Conserva el acceso web y las pantallas nativas de la app.
+La variante `release` incluye el código JavaScript y los recursos dentro del APK. Se conecta por HTTPS a Azure y no necesita Expo/Metro, el ordenador de desarrollo ni estar en la misma red local. Incluye el acceso y las pantallas nativas de la app.
 
 En Android Studio abre `android`, sincroniza Gradle y selecciona `release` para el módulo `app` en **Build > Select Build Variant** (o la ventana **Build Variants**). Usa **Build > Build Bundle(s) / APK(s) > Build APK(s)** para generar el APK. La ruta de salida es `android/app/build/outputs/apk/release/app-release.apk`. Para volver a desarrollar con recarga automática, selecciona `debug`.
 
@@ -69,7 +69,7 @@ Se generó e instaló el APK release 1.0.0 en el emulador, con las cuatro arquit
 
 ## Próxima etapa
 
-Sustituir acceso y registro de cuentas por pantallas nativas y diseñar autenticación móvil independiente antes de retirar la WebView. Completar OAuth Amazon, pruebas físicas y requisitos de tiendas antes de publicar.
+Diseñar autenticación móvil independiente antes de retirar el puente invisible de sesión. Completar OAuth Amazon, pruebas físicas y requisitos de tiendas antes de publicar.
 
 ## Control remoto y acceso biométrico
 
@@ -81,6 +81,6 @@ Face ID necesita una compilación iOS propia; no funciona en Expo Go. Tras añad
 
 ### Actualización del servidor
 
-Copia también `mobile_control.py` y el `app.py` actualizado a Azure y reinicia `wol.service`. Debe estar habilitado `ENABLE_WINDOWS_AGENT=1` y aplicada la migración de presencia de la versión actual del backend. Esta entrega no añade tablas MariaDB ni cambia el protocolo del agente. Al iniciar, el backend crea automáticamente la tabla de sesiones móviles en su SQLite de autenticación. Las nuevas APIs están protegidas por sesión, CSRF y comprobaciones de propietario. Si Azure aún no tiene estas rutas, Control muestra un error y deshabilita la vinculación.
+Copia también `mobile_control.py`, `native_auth.py` y el `app.py` actualizado a Azure y reinicia `wol.service`. Debe estar habilitado `ENABLE_WINDOWS_AGENT=1` y aplicada la migración de presencia de la versión actual del backend. Esta entrega no añade tablas MariaDB ni cambia el protocolo del agente. Al iniciar, el backend crea automáticamente la tabla de sesiones móviles en su SQLite de autenticación. Las nuevas APIs están protegidas por sesión, CSRF y comprobaciones de propietario. Si Azure aún no tiene estas rutas, el acceso o Control muestran un error.
 
 Validación local: 22 pruebas del puente y bloqueo, lint, TypeScript, Expo Doctor y exportación Android/iOS. La prueba del backend recorre móvil -> cola -> claim del agente con un catálogo ficticio y verifica permisos, revocación, aislamiento, cancelación e idempotencia. No abre programas, apaga equipos ni utiliza cuentas Amazon reales. Verificar Face ID/huella en un teléfono físico y enviar una orden real desde datos móviles tras actualizar Azure.
